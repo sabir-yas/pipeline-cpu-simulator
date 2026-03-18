@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEGv8 Pipeline Simulator Report — test1_data_hazards.asm</title>
+  <style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2d3148;
+  --text: #e2e8f0;
+  --muted: #718096;
+  --accent: #4299e1;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.6;
+}
+.container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+h1 { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: .5rem; }
+h2 { font-size: 1.25rem; font-weight: 600; color: var(--accent);
+     margin: 2rem 0 .75rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+h3 { font-size: 1rem; font-weight: 600; color: #a0aec0; margin: 1rem 0 .5rem; }
+.subtitle { color: var(--muted); margin-bottom: 2rem; }
+.badge {
+  display: inline-block; padding: .2rem .6rem; border-radius: 4px;
+  font-size: .75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.badge-on  { background: #1c4532; color: #68d391; }
+.badge-off { background: #5c2626; color: #fc8181; }
+
+/* Pipeline diagram */
+.pipeline-wrap { overflow-x: auto; }
+table.pipeline {
+  border-collapse: collapse; font-size: .8rem;
+  margin-bottom: 1rem;
+}
+table.pipeline th, table.pipeline td {
+  border: 1px solid var(--border);
+  padding: .3rem .5rem; text-align: center;
+  white-space: nowrap;
+}
+table.pipeline th { background: #1e2130; color: var(--accent); }
+table.pipeline td.instr-label { text-align: left; font-family: monospace; color: var(--text); min-width: 220px; }
+.s-if    { background: #1a3a6b; color: #90cdf4; font-weight: 700; }
+.s-id    { background: #4a3800; color: #f6e05e; font-weight: 700; }
+.s-ex    { background: #1a4a2e; color: #9ae6b4; font-weight: 700; }
+.s-mem   { background: #2d1b5e; color: #d6bcfa; font-weight: 700; }
+.s-wb    { background: #003344; color: #76e4f7; font-weight: 700; }
+.s-bubble{ background: #1a1d27; color: #4a5568; }
+.s-flush { background: #4a1010; color: #fc8181; font-weight: 700; }
+.s-stall { background: #2d2a1a; color: #d69e2e; font-weight: 700; }
+
+/* Metrics */
+table.metrics {
+  border-collapse: collapse; width: 100%;
+}
+table.metrics th, table.metrics td {
+  border: 1px solid var(--border); padding: .5rem .75rem;
+}
+table.metrics th { background: #1e2130; color: var(--accent); text-align: left; }
+table.metrics td { text-align: right; }
+table.metrics td.label { text-align: left; color: var(--text); }
+.val-green { color: #68d391; font-weight: 700; }
+.val-yellow{ color: #f6e05e; font-weight: 700; }
+.val-cyan  { color: #76e4f7; font-weight: 700; }
+.speedup-row td { border-top: 2px solid var(--accent); }
+
+/* Register trace */
+table.regtrace {
+  border-collapse: collapse; font-size: .75rem;
+  width: 100%;
+}
+table.regtrace th, table.regtrace td {
+  border: 1px solid var(--border); padding: .25rem .4rem; text-align: right;
+}
+table.regtrace th { background: #1e2130; color: var(--accent); }
+table.regtrace td.cycle-label { text-align: center; color: var(--muted); }
+.changed { background: #1a3a1a; color: #9ae6b4; }
+
+/* Program listing */
+table.listing {
+  border-collapse: collapse; width: 100%; font-family: monospace; font-size: .82rem;
+}
+table.listing th, table.listing td {
+  border: 1px solid var(--border); padding: .3rem .6rem;
+}
+table.listing th { background: #1e2130; color: var(--accent); text-align: left; }
+table.listing td.pc   { color: var(--muted); }
+table.listing td.text { color: #90cdf4; }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.legend-item { padding: .2rem .6rem; border-radius: 3px; font-size: .75rem; font-weight: 700; }
+
+/* Tabs for fwd ON/OFF */
+.tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.tab-btn {
+  padding: .4rem 1rem; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted);
+  border-radius: 4px; cursor: pointer; font-size: .85rem;
+}
+.tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+footer {
+  margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: .8rem; text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>LEGv8 Pipeline CPU Simulator</h1>
+  <p class="subtitle">
+    CSCI 4591 Computer Architecture · Honors Project · CU Denver &nbsp;|&nbsp;
+    Program: <strong>test1_data_hazards.asm</strong> &nbsp;|&nbsp;
+    <span class="badge badge-on">Forwarding ON</span> &nbsp;|&nbsp;
+    Generated: 2026-03-18 14:42
+  </p>
+  
+<h2>Program Listing — test1_data_hazards.asm</h2>
+<table class="listing">
+  <thead>
+    <tr><th>PC</th><th>#</th><th>Assembly</th><th>Opcode</th><th>Format</th>
+        <th>RegWrite</th><th>MemRead</th><th>MemWrite</th></tr>
+  </thead>
+  <tbody><tr><td class="pc">0x0000</td><td>0</td><td class="text">ADDI X1, XZR, #10</td><td>ADDI</td><td>I</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x0004</td><td>1</td><td class="text">ADDI X2, XZR, #20</td><td>ADDI</td><td>I</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x0008</td><td>2</td><td class="text">ADD  X3, X1, X2</td><td>ADD</td><td>R</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x000C</td><td>3</td><td class="text">SUB  X4, X3, X1</td><td>SUB</td><td>R</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x0010</td><td>4</td><td class="text">AND  X5, X3, X4</td><td>AND</td><td>R</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x0014</td><td>5</td><td class="text">ORR  X6, X5, X1</td><td>ORR</td><td>R</td><td>✓</td><td></td><td></td></tr>
+<tr><td class="pc">0x0018</td><td>6</td><td class="text">HALT</td><td>HALT</td><td>X</td><td></td><td></td><td></td></tr>
+</tbody>
+</table>
+
+
+<h2>Pipeline Execution Diagram</h2>
+<div class="legend"><span class="legend-item s-if">IF</span> <small style="color:#718096;margin-right:.75rem">Instruction Fetch</small><span class="legend-item s-id">ID</span> <small style="color:#718096;margin-right:.75rem">Instruction Decode</small><span class="legend-item s-ex">EX</span> <small style="color:#718096;margin-right:.75rem">Execute</small><span class="legend-item s-mem">MEM</span> <small style="color:#718096;margin-right:.75rem">Memory Access</small><span class="legend-item s-wb">WB</span> <small style="color:#718096;margin-right:.75rem">Write Back</small><span class="legend-item s-bubble">·</span> <small style="color:#718096;margin-right:.75rem">Bubble</small><span class="legend-item s-flush">***</span> <small style="color:#718096;margin-right:.75rem">Flushed</small><span class="legend-item s-stall">STA</span> <small style="color:#718096;margin-right:.75rem">Stalled/Frozen</small></div>
+<div id="diag-tabs" class="tabs">
+  <button class="tab-btn active" id="diag-fwd-on-btn"
+          onclick="switchTab('diag-tabs','diag-fwd-on')">
+    Forwarding ON
+  </button>
+  <button class="tab-btn" id="diag-fwd-off-btn"
+          onclick="switchTab('diag-tabs','diag-fwd-off')">
+    Forwarding OFF
+  </button></div><div id="diag-fwd-on-content" class="tab-content active pipeline-wrap"><table class="pipeline"><thead><tr><th>Instruction</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th></tr>
+</thead><tbody><tr><td class="instr-label">ADDI X1, XZR, #10</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ADDI X2, XZR, #20</td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ADD  X3, X1, X2</td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">SUB  X4, X3, X1</td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">AND  X5, X3, X4</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ORR  X6, X5, X1</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td></tr>
+<tr><td class="instr-label">HALT</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td></tr>
+</tbody></table></div><div id="diag-fwd-off-content" class="tab-content pipeline-wrap"><table class="pipeline"><thead><tr><th>Instruction</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th><th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th></tr>
+</thead><tbody><tr><td class="instr-label">ADDI X1, XZR, #10</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ADDI X2, XZR, #20</td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ADD  X3, X1, X2</td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">SUB  X4, X3, X1</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">AND  X5, X3, X4</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td></tr>
+<tr><td class="instr-label">ORR  X6, X5, X1</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td><td class=""></td></tr>
+<tr><td class="instr-label">HALT</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="s-if">IF</td><td class="s-id">ID</td><td class="s-ex">EX</td><td class="s-mem">MEM</td><td class="s-wb">WB</td></tr>
+</tbody></table></div>
+
+<h2>Performance Metrics</h2>
+<table class="metrics">
+  <thead>
+    <tr><th>Metric</th><th>Forwarding ON</th><th>Forwarding OFF</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="label">Total Cycles</td>
+        <td class="val-green">11</td>
+        <td class="val-yellow">23</td><td>—</td></tr>
+    <tr><td class="label">Instructions Retired</td>
+        <td class="val-green">6</td>
+        <td class="val-yellow">6</td><td>—</td></tr>
+    <tr><td class="label">CPI</td>
+        <td class="val-green">1.833</td>
+        <td class="val-yellow">3.833</td><td>Lower is better</td></tr>
+    <tr><td class="label">Stall Cycles</td>
+        <td class="val-green">0</td>
+        <td class="val-yellow">12</td><td>—</td></tr>
+    <tr><td class="label">Flush Cycles (branch penalty)</td>
+        <td class="val-green">0</td>
+        <td class="val-yellow">0</td><td>Always 2/taken branch</td></tr>
+    
+<tr class="speedup-row">
+  <td class="label"><strong>Speedup (Fwd ON ÷ Fwd OFF cycles)</strong></td>
+  <td class="val-cyan">—</td>
+  <td class="val-cyan">—</td>
+  <td class="val-cyan"><strong>2.09×</strong></td>
+</tr>
+  </tbody>
+</table>
+
+
+<h2>Register Value Trace</h2>
+<p style="color:var(--muted);margin-bottom:.5rem">
+  Highlighted cells indicate value changed this cycle. Only non-zero registers shown.
+</p>
+<div style="overflow-x:auto">
+<table class="regtrace">
+  <thead><tr><th>Cycle</th><th>X1</th><th>X2</th><th>X3</th><th>X4</th><th>X5</th><th>X6</th></tr>
+</thead>
+  <tbody><tr><td class="cycle-label">1</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">2</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">3</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">4</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">5</td><td class="changed">10</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">6</td><td class="">10</td><td class="changed">20</td><td class="">·</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">7</td><td class="">10</td><td class="">20</td><td class="changed">30</td><td class="">·</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">8</td><td class="">10</td><td class="">20</td><td class="">30</td><td class="changed">20</td><td class="">·</td><td class="">·</td></tr>
+<tr><td class="cycle-label">9</td><td class="">10</td><td class="">20</td><td class="">30</td><td class="">20</td><td class="changed">20</td><td class="">·</td></tr>
+<tr><td class="cycle-label">10</td><td class="">10</td><td class="">20</td><td class="">30</td><td class="">20</td><td class="">20</td><td class="changed">30</td></tr>
+<tr><td class="cycle-label">11</td><td class="">10</td><td class="">20</td><td class="">30</td><td class="">20</td><td class="">20</td><td class="">30</td></tr>
+</tbody>
+</table>
+</div>
+
+  <footer>
+    LEGv8 5-Stage Pipeline CPU Simulator · Yaseer Sabir · CSCI 4591 Honors Contract
+  </footer>
+</div>
+<script>
+function switchTab(groupId, tabId) {
+  document.querySelectorAll('#' + groupId + ' .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#' + groupId + ' .tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabId + '-btn').classList.add('active');
+  document.getElementById(tabId + '-content').classList.add('active');
+}
+</script>
+</body>
+</html>
