@@ -1,8 +1,10 @@
 // LEGv8 5-stage pipeline: C++ port of the Python reference model (simulator.py + cpu/).
 // Mirrors it stage for stage so per-cycle traces can be diffed by harness.py.
 //
-// Usage: legv8 <decoded.txt> <fwd 0|1> [fault] [max_cycles]
+// Usage: legv8 <decoded.txt> <fwd 0|1> [fault] [max_cycles] [-q]
+// -q: no per-cycle trace; END line adds the simulation loop's wall time (benchmarking)
 // decoded.txt: one instruction per line, "OP rd rn rm rt imm offset pc" (-1 = unused register)
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -305,7 +307,7 @@ struct Sim {
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <decoded.txt> <fwd 0|1> [fault] [max_cycles]\n", argv[0]);
+        fprintf(stderr, "usage: %s <decoded.txt> <fwd 0|1> [fault] [max_cycles] [-q]\n", argv[0]);
         return 2;
     }
     if (argc > 3) {
@@ -315,6 +317,7 @@ int main(int argc, char** argv) {
         fault = (Fault)k;
     }
     u64 max_cycles = argc > 4 ? strtoull(argv[4], nullptr, 10) : 10000;
+    bool quiet = argc > 5 && strcmp(argv[5], "-q") == 0;
 
     Sim sim;
     sim.fwd_enabled = argv[2][0] == '1';
@@ -331,6 +334,14 @@ int main(int argc, char** argv) {
         sim.imem.push_back(in);
     }
 
+    if (quiet) {  // benchmark: no trace, time the simulation loop only
+        auto t0 = std::chrono::steady_clock::now();
+        while (!sim.halted && sim.cycles < max_cycles) sim.step();
+        double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        printf("END cycles=%llu retired=%llu stalls=%llu flushes=%llu time_s=%.6f\n",
+               (ull)sim.cycles, (ull)sim.retired, (ull)sim.stalls, (ull)sim.flushes, secs);
+        return 0;
+    }
     while (!sim.halted && sim.cycles < max_cycles) {
         sim.step();
         sim.trace();

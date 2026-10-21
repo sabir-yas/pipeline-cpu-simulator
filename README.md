@@ -120,17 +120,32 @@ Expected: X1=0, X2=15, X4=15 | Speedup ~1.45x
 2. **Per-cycle diff.** PC, stall, flush, X0–X30, and stores are compared every cycle. The first mismatch is reported as cycle + field, e.g. `c=7: python x3=1e vs c++ x3=a`.
 3. **Fault injection.** 9 bugs can be injected into the C++ side (`no_fwd_exmem`, `no_fwd_memwb`, `fwd_priority`, `no_load_use_stall`, `no_flush`, `short_flush`, `str_no_data_fwd`, `cbz_reads_rn`, `xzr_writable`). The harness must catch each one.
 
+4. **Random programs** (`--fuzz N`): ALU, load/store, and forward-only branch code, so every program halts. A small register pool keeps hazards frequent. Programs run through the same diff and fault matrix with no hand-written tests. Divergent programs are saved to `build/fuzz_fail_*.asm`.
+5. **Benchmark** (`--bench`): `bench/bench_loop.asm`, ~1M cycles, forwarding on, median of 5 runs. Only the simulation loop is timed, with per-cycle tracing off on both sides (`SimulationConfig(record=False)` / `legv8 ... -q`).
+
 ```bash
-g++ -O2 -std=c++17 -static cpp/legv8.cpp -o build/legv8   # or: cmake -S cpp -B build && cmake --build build
-python harness.py
+g++ -O2 -std=c++17 -static cpp/legv8.cpp -o build/legv8
+# or: cmake -S cpp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
+python harness.py                       # directed tests + fault matrix
+python harness.py --fuzz 2000 --bench   # + random programs + speed
 ```
 
-Current result: **10/10 runs pass EXPECT and match the Python reference model; 9/9 injected faults detected.**
+### Results
+
+| Check | Result |
+|---|---|
+| Directed programs (5 × fwd on/off) | 10/10 pass EXPECT and match the Python reference model every cycle |
+| Injected faults, directed tests | 9/9 detected |
+| Random programs (2000 × fwd on/off, seed 1) | 4000 runs, 96,613 cycles compared, 0 divergences |
+| Injected faults, random programs only | 9/9 detected, each within the first 23 runs |
+| Speed, `bench_loop.asm`: 1,001,504 cycles, CPI 1.599 | Python 14.84 s (0.067 M cycles/s), C++ 0.073 s (13.7 M cycles/s): **203× speedup** |
+
+Benchmark: MSYS2 g++ 16.1 `-O2`, Python 3.13, Windows 11, same machine.
 `short_flush` (a 1-cycle branch penalty) leaves the final state correct, so only the per-cycle comparison catches it.
 
 "Match" means the C++ port matches the Python reference model, not that either is verified against the LEGv8 spec. The fault matrix shows the harness is sensitive to these bug classes.
 
-**Bug found in the reference model:** with forwarding OFF, a stall and a taken-branch flush in the same cycle let the stall win. The wrong-path instruction was kept in IF/ID and executed. Fixed so the flush wins (`test5_stall_flush.asm` covers it). The C++ port alone would have mirrored the bug. The EXPECT check is what catches it.
+**Bug found in the reference model:** with forwarding OFF, a stall and a taken-branch flush in the same cycle let the stall win. The wrong-path instruction was kept in IF/ID and executed. Fixed so the flush wins (`test5_stall_flush.asm` covers it). The C++ port alone would have mirrored the bug. The EXPECT check is what catches it. With the bug put back into the Python model, the fuzzer also flags it at the 4th random program. That only works because the two models now disagree on this path.
 
 ---
 
@@ -161,6 +176,8 @@ programs/
   test3_branches.asm
   test4_corner_cases.asm  — forwarding priority, store-data fwd, CBZ on loaded reg, XZR writes
   test5_stall_flush.asm   — stall + flush in the same cycle
+bench/
+  bench_loop.asm          — ~1M-cycle benchmark (harness.py --bench)
 ```
 
 ---

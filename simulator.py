@@ -17,6 +17,7 @@ class SimulationConfig:
     forwarding_enabled: bool = True
     max_cycles: int = 10_000
     program_name: str = ""
+    record: bool = True      # build per-cycle CycleSnapshots (needed by the UI and harness)
 
 
 # ── Per-cycle snapshot (for rendering) ───────────────────────────────────────
@@ -92,7 +93,7 @@ class PipelineSimulator:
     def reset(self) -> None:
         self.__init__(self.config)
 
-    def step(self) -> CycleSnapshot:
+    def step(self) -> CycleSnapshot | None:
         """Advance one clock cycle. Returns a snapshot for logging/rendering."""
         assert self.imem is not None, "No program loaded"
 
@@ -153,31 +154,33 @@ class PipelineSimulator:
             self.metrics.stall_count += 1
 
         # 9. Build snapshot before advancing
-        fwd = hazard_signals.forwarding
-        snapshot = CycleSnapshot(
-            cycle=self.metrics.total_cycles + 1,
-            stages={
-                "IF":  StageInfo("IF",  str(new_if_id.instruction),
-                                 is_flush=flushed_this_cycle and not hazard_signals.stall),
-                "ID":  StageInfo("ID",  str(self.if_id.instruction),
-                                 is_bubble=not self.if_id.valid,
-                                 is_stall=hazard_signals.stall,
-                                 is_flush=flushed_this_cycle),
-                "EX":  StageInfo("EX",  str(self.id_ex.instruction),
-                                 is_bubble=not self.id_ex.valid,
-                                 forward_a=fwd.forward_a.value if fwd.forward_a != ForwardingSource.NONE else "",
-                                 forward_b=fwd.forward_b.value if fwd.forward_b != ForwardingSource.NONE else ""),
-                "MEM": StageInfo("MEM", str(self.ex_mem.instruction),
-                                 is_bubble=not self.ex_mem.valid),
-                "WB":  StageInfo("WB",  str(self.mem_wb.instruction),
-                                 is_bubble=not self.mem_wb.valid),
-            },
-            pc=self.pc,
-            stalled=hazard_signals.stall,
-            flushed=flushed_this_cycle,
-            reg_snapshot=self.regfile.snapshot(),
-            forwarding=fwd,
-        )
+        snapshot = None
+        if self.config.record:  # off for benchmarking: snapshots are ~2/3 of Python run time
+            fwd = hazard_signals.forwarding
+            snapshot = CycleSnapshot(
+                cycle=self.metrics.total_cycles + 1,
+                stages={
+                    "IF":  StageInfo("IF",  str(new_if_id.instruction),
+                                     is_flush=flushed_this_cycle and not hazard_signals.stall),
+                    "ID":  StageInfo("ID",  str(self.if_id.instruction),
+                                     is_bubble=not self.if_id.valid,
+                                     is_stall=hazard_signals.stall,
+                                     is_flush=flushed_this_cycle),
+                    "EX":  StageInfo("EX",  str(self.id_ex.instruction),
+                                     is_bubble=not self.id_ex.valid,
+                                     forward_a=fwd.forward_a.value if fwd.forward_a != ForwardingSource.NONE else "",
+                                     forward_b=fwd.forward_b.value if fwd.forward_b != ForwardingSource.NONE else ""),
+                    "MEM": StageInfo("MEM", str(self.ex_mem.instruction),
+                                     is_bubble=not self.ex_mem.valid),
+                    "WB":  StageInfo("WB",  str(self.mem_wb.instruction),
+                                     is_bubble=not self.mem_wb.valid),
+                },
+                pc=self.pc,
+                stalled=hazard_signals.stall,
+                flushed=flushed_this_cycle,
+                reg_snapshot=self.regfile.snapshot(),
+                forwarding=fwd,
+            )
 
         # 10. Advance pipeline registers
         self.if_id  = new_if_id
@@ -186,7 +189,8 @@ class PipelineSimulator:
         self.mem_wb = new_mem_wb
         self.metrics.total_cycles += 1
 
-        self.cycle_log.append(snapshot)
+        if snapshot:
+            self.cycle_log.append(snapshot)
         return snapshot
 
     def run(self) -> PerformanceMetrics:
