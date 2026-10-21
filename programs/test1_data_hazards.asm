@@ -1,4 +1,5 @@
 // Test 1: RAW Data Hazards
+// EXPECT X1=10 X2=20 X3=30 X4=20 X5=20 X6=30
 // Demonstrates forwarding paths (EX/MEM and MEM/WB forwarding)
 // With forwarding ON: minimal stalls
 // With forwarding OFF: multiple stall cycles required
