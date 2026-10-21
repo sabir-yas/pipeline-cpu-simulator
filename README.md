@@ -4,6 +4,8 @@ A cycle-accurate simulation of a **5-stage pipelined LEGv8 CPU** in Python. LEGv
 
 Simulates instruction fetch through write-back with full hazard handling: data forwarding, load-use stalls, and branch flushes. Includes an interactive terminal UI and HTML report generation.
 
+It also has a **C++ port** that is checked against the Python model by a **differential validation harness**. The harness compares state every cycle, runs random programs, and injects faults to show it catches bugs. The C++ sim runs **125–203× faster** than Python. See [C++ Port + Differential Validation Harness](#c-port--differential-validation-harness).
+
 ---
 
 ## Features
@@ -16,6 +18,9 @@ Simulates instruction fetch through write-back with full hazard handling: data f
 - Step-by-step or full-run mode
 - Rich terminal output: pipeline diagram, register state, metrics
 - HTML report generation
+- C++ port, compared against the Python reference model every cycle (PC, stall, flush, registers, stores)
+- 9 injectable pipeline faults, used to show the harness catches each one
+- Random-program fuzzer and a ~1M-cycle C++ vs Python benchmark
 
 ---
 
@@ -39,6 +44,15 @@ pip install rich
 ```
 
 Requires Python 3.10+ (uses `match` statement).
+
+For the C++ port and harness, you also need a C++17 compiler (g++ or clang++). On Windows, use MSYS2:
+
+```
+winget install MSYS2.MSYS2
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc"
+```
+
+Add `C:\msys64\ucrt64\bin` to PATH. Without it, g++ fails with no error message.
 
 ---
 
@@ -108,6 +122,39 @@ HALT
 ```
 
 Expected: X1=0, X2=15, X4=15 | Speedup ~1.45x
+
+---
+
+### `test4_corner_cases.asm` — Forwarding Corner Cases
+Covers the paths tests 1–3 don't reach. Each one is the target of an injected fault in the harness.
+
+```
+ADDI XZR, XZR, #5    // write to XZR must be discarded
+ADDI X1, XZR, #1
+ADDI X1, XZR, #2     // X1 written twice back to back
+ADD  X2, X1, XZR     // EX/MEM (newest) must beat MEM/WB -> X2 = 2
+ADDI X4, XZR, #7
+STR  X4, [X3, #0]    // store data forwarded from EX/MEM
+LDR  X5, [X3, #0]
+CBZ  X5, SKIP        // branch on a just-loaded reg: load-use stall + MEM/WB fwd
+```
+
+Expected: X1=2, X2=2, X3=64, X4=7, X5=7, X6=1, X7=0 | Speedup ~1.47x
+
+---
+
+### `test5_stall_flush.asm` — Stall + Flush in the Same Cycle
+Regression test for a bug the harness work found. With forwarding OFF, `ADD` stalls on X1 while `B` is taken. The flush must win, so the wrong-path `ADD` never executes.
+
+```
+ADDI X1, XZR, #1
+B    DONE
+ADD  X2, X1, X1      // wrong path: must be squashed
+DONE:
+HALT
+```
+
+Expected: X1=1, X2=0 | Speedup 1.00x (only the stall differs, and the flush squashes it)
 
 ---
 
