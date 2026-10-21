@@ -138,9 +138,9 @@ python harness.py --fuzz 2000 --bench   # + random programs + speed
 | Injected faults, directed tests | 9/9 detected |
 | Random programs (2000 × fwd on/off, seed 1) | 4000 runs, 96,613 cycles compared, 0 divergences |
 | Injected faults, random programs only | 9/9 detected, each within the first 23 runs |
-| Speed, `bench_loop.asm`: 1,001,504 cycles, CPI 1.599 | Python 14.84 s (0.067 M cycles/s), C++ 0.073 s (13.7 M cycles/s): **203× speedup** |
+| Speed, `bench_loop.asm`: 1,001,504 cycles, CPI 1.599 | Python 7.23 s (0.139 M cycles/s), C++ 0.058 s (17.3 M cycles/s): **125× speedup** |
 
-Benchmark: MSYS2 g++ 16.1 `-O2`, Python 3.13, Windows 11, same machine.
+Benchmark: MSYS2 g++ 16.1 `-O2`, Python 3.13, Windows 11, same machine. The speedup varied from 125× to 203× across runs, depending on machine load. The table shows the lower one.
 `short_flush` (a 1-cycle branch penalty) leaves the final state correct, so only the per-cycle comparison catches it.
 
 "Match" means the C++ port matches the Python reference model, not that either is verified against the LEGv8 spec. The fault matrix shows the harness is sensitive to these bug classes.
