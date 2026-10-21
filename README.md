@@ -77,7 +77,7 @@ ORR  X6, X5, X1      // EX/MEM fwd X5
 HALT
 ```
 
-Expected: X1=10, X2=20, X3=30, X4=20, X5=20, X6=26 | Speedup ~2.09x
+Expected: X1=10, X2=20, X3=30, X4=20, X5=20, X6=30 | Speedup ~2.09x
 
 ---
 
@@ -111,10 +111,35 @@ Expected: X1=0, X2=15, X4=15 | Speedup ~1.45x
 
 ---
 
+## C++ Port + Differential Validation Harness
+
+`cpp/legv8.cpp` is a C++ port of the pipeline. The Python simulator is the reference model.
+`harness.py` runs every program in `programs/` through both, with forwarding ON and OFF, and checks three things:
+
+1. **Hand-computed results.** Each program's `// EXPECT X1=10 ...` line is checked against the Python model's final registers. Every register not listed must be 0. This is the check that is independent of both simulators.
+2. **Per-cycle diff.** PC, stall, flush, X0–X30, and stores are compared every cycle. The first mismatch is reported as cycle + field, e.g. `c=7: python x3=1e vs c++ x3=a`.
+3. **Fault injection.** 9 bugs can be injected into the C++ side (`no_fwd_exmem`, `no_fwd_memwb`, `fwd_priority`, `no_load_use_stall`, `no_flush`, `short_flush`, `str_no_data_fwd`, `cbz_reads_rn`, `xzr_writable`). The harness must catch each one.
+
+```bash
+g++ -O2 -std=c++17 -static cpp/legv8.cpp -o build/legv8   # or: cmake -S cpp -B build && cmake --build build
+python harness.py
+```
+
+Current result: **10/10 runs pass EXPECT and match the Python reference model; 9/9 injected faults detected.**
+`short_flush` (a 1-cycle branch penalty) leaves the final state correct, so only the per-cycle comparison catches it.
+
+"Match" means the C++ port matches the Python reference model, not that either is verified against the LEGv8 spec. The fault matrix shows the harness is sensitive to these bug classes.
+
+**Bug found in the reference model:** with forwarding OFF, a stall and a taken-branch flush in the same cycle let the stall win. The wrong-path instruction was kept in IF/ID and executed. Fixed so the flush wins (`test5_stall_flush.asm` covers it). The C++ port alone would have mirrored the bug. The EXPECT check is what catches it.
+
+---
+
 ## Project Structure
 
 ```
 main.py               — interactive menu and UI
+harness.py            — Python-vs-C++ differential validation + fault injection
+cpp/legv8.cpp         — C++ port of the pipeline (fault-injectable)
 simulator.py          — PipelineSimulator: orchestrates all stages per cycle
 cpu/
   isa.py              — Opcode enum and instruction format metadata
@@ -134,6 +159,8 @@ programs/
   test1_data_hazards.asm
   test2_load_use.asm
   test3_branches.asm
+  test4_corner_cases.asm  — forwarding priority, store-data fwd, CBZ on loaded reg, XZR writes
+  test5_stall_flush.asm   — stall + flush in the same cycle
 ```
 
 ---

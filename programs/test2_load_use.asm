@@ -1,10 +1,11 @@
 // Test 2: Load-Use Hazard + Memory Operations
+// EXPECT X2=100 X3=200 X4=200 X5=99 X6=99 X7=99 X9=100 X10=200
 // Demonstrates the unavoidable load-use stall (1 cycle even with forwarding)
 // Also shows STR->LDR memory round-trip
 //
 // Memory layout: address 0 = 100, address 8 = 200
 // Expected results:
-//   X1 = 4 (base addr)
+//   X1 = 0 (base addr)
 //   X2 = 100 (loaded from mem[0] after init)
 //   X3 = 200 (X2 + X2 after load-use stall)
 //   X5 = 99 (stored then reloaded)

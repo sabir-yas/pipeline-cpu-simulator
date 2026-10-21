@@ -1,4 +1,5 @@
 // Test 3: Branch Hazards + Loop
+// EXPECT X2=15 X3=1 X4=15
 // Demonstrates 2-cycle branch penalty (flush) on taken branches
 // Loop computes sum = 5+4+3+2+1 = 15
 //

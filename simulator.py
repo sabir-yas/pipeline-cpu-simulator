@@ -121,6 +121,8 @@ class PipelineSimulator:
             flushed_this_cycle = True
             self.metrics.flush_count += 1
             self.pc = new_ex_mem.branch_target
+            # Flush beats stall: the stalled instruction in IF/ID is on the wrong path
+            hazard_signals.stall = False
 
         # 6. ID
         if hazard_signals.stall:
